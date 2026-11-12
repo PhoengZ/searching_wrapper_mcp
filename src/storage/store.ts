@@ -6,7 +6,7 @@ import { AppError } from '../domain/errors.js';
 import { emptyCounts, terminal, type Job, type JobKind, type Source, type Evidence, type EvidenceInput, type Candidate, type ExportManifest } from '../domain/types.js';
 type PayloadRow = { payload: string; seq?: number };
 export class Store {
-  private db: DatabaseSync;
+  private db!: DatabaseSync;
   private lock: DatabaseSync;
   private closed = false;
   constructor(directory: string) {
@@ -16,6 +16,8 @@ export class Store {
     catch { this.lock.close(); throw new AppError('PROFILE_IN_USE'); }
     try {
       this.db = new DatabaseSync(join(directory, 'research.sqlite'));
+      const version = Number((this.db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version);
+      if (version > 1) throw new AppError('UNSUPPORTED_DB_VERSION');
       this.db.exec(`PRAGMA foreign_keys=ON; PRAGMA busy_timeout=100;
         CREATE TABLE IF NOT EXISTS sources (id TEXT PRIMARY KEY, payload TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, payload TEXT NOT NULL);
@@ -24,7 +26,7 @@ export class Store {
         CREATE TABLE IF NOT EXISTS candidates (seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE NOT NULL, job_id TEXT REFERENCES jobs(id) ON DELETE CASCADE, payload TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS exports (id TEXT PRIMARY KEY, job_id TEXT REFERENCES jobs(id) ON DELETE CASCADE, payload TEXT NOT NULL);
         PRAGMA user_version=1;`);
-    } catch (error) { this.lock.close(); throw error; }
+    } catch (error) { this.db?.close(); this.lock.close(); throw error; }
   }
   close(): void { if (!this.closed) { this.closed = true; this.db.close(); this.lock.close(); } }
   transaction<T>(action: () => T): T {
