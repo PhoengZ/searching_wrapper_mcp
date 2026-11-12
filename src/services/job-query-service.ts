@@ -26,6 +26,6 @@ export class JobQueryService {
     const hasMore = items.length < rows.length;
     const next_cursor = hasMore ? Buffer.from(JSON.stringify({ job_id: job.job_id, kind: job.kind, last: items.at(-1)!.sequence, upper })).toString('base64url') : null;
     const { _posts: _privatePosts, ...requested } = job.input;
-    return { job_id: job.job_id, kind: job.kind, status: job.status, created_at: job.created_at, started_at: job.started_at, finished_at: job.finished_at, counts: job.counts, requested_filters: requested, effective_filters: job.effective_filters, source: job.source, limitations: job.limitations, stop_reason: job.stop_reason, cancellation_requested: job.cancellation_requested, items, next_cursor };
+    return { job_id: job.job_id, kind: job.kind, status: job.status, created_at: job.created_at, started_at: job.started_at, finished_at: job.finished_at, counts: job.counts, requested_filters: requested, effective_filters: job.effective_filters, source: job.source, limitations: job.limitations, stop_reason: job.stop_reason, cancellation_requested: job.cancellation_requested, cleanup_pending: job.cleanup_pending ?? false, items, next_cursor };
   }
 }

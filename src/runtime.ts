@@ -7,6 +7,7 @@ import { JobQueryService } from './services/job-query-service.js';
 import type { Adapter } from './adapters/adapter.js';
 import { MockAdapter } from './adapters/mock-adapter.js';
 import { AppError } from './domain/errors.js';
+import { DataService } from './services/data-service.js';
 export async function createRuntime(config: Config = readConfig(), overrides: { adapter?: Adapter } = {}) {
   const store = new Store(config.dataDir); store.recover();
   const adapter: Adapter = overrides.adapter ?? (config.mode === 'mock' ? new MockAdapter() : {
@@ -14,9 +15,11 @@ export async function createRuntime(config: Config = readConfig(), overrides: { 
   });
   const engine = new JobEngine(store, config.limits.max_queue, () => adapter.close());
   const sources = new SourceService(store, config); const research = new ResearchService(store, config, engine, adapter); const query = new JobQueryService(store);
+  const data = new DataService(store, config); await data.sweep();
+  const retentionTimer = setInterval(() => { void data.sweep().catch(() => console.error('RETENTION_FAILED')); }, 3600000); retentionTimer.unref();
   let closed = false;
-  return { config, store, engine, sources, research, query,
-    async close() { if (closed) return; closed = true; await engine.close(); await adapter.close(); store.close(); },
+  return { config, store, engine, sources, research, query, data,
+    async close() { if (closed) return; closed = true; clearInterval(retentionTimer); await engine.close(); await data.close(); await adapter.close(); store.close(); },
   };
 }
 export type Runtime = Awaited<ReturnType<typeof createRuntime>>;
