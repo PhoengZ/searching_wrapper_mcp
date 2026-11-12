@@ -78,6 +78,14 @@ export class Store {
     this.db.prepare('INSERT INTO candidates (id,job_id,payload) VALUES (?,?,?)').run(value.candidate_id, jobId, JSON.stringify(value)); return value;
   }
   candidates(jobId: string): Candidate[] { return this.many<Candidate>('SELECT seq,payload FROM candidates WHERE job_id=? ORDER BY seq', jobId); }
+  resultUpper(jobId: string, kind: JobKind): number {
+    const table = kind === 'discovery' ? 'candidates' : 'observations';
+    return Number((this.db.prepare(`SELECT COALESCE(MAX(seq),0) AS n FROM ${table} WHERE job_id=?`).get(jobId) as { n: number }).n);
+  }
+  resultPage(jobId: string, kind: JobKind, after: number, upper: number, limit: number): (Candidate | Evidence)[] {
+    const table = kind === 'discovery' ? 'candidates' : 'observations';
+    return this.many(`SELECT seq,payload FROM ${table} WHERE job_id=? AND seq>? AND seq<=? ORDER BY seq LIMIT ?`, jobId, after, upper, limit);
+  }
   candidate(id: string): Candidate { const value = this.one<Candidate>('SELECT payload FROM candidates WHERE id=?', id); if (!value) throw new AppError('CANDIDATE_NOT_FOUND'); return value; }
   saveExport(value: ExportManifest): void { this.db.prepare('INSERT INTO exports VALUES (?,?,?)').run(value.export_id, value.job_id, JSON.stringify(value)); }
   exports(jobId: string): ExportManifest[] { return this.many<ExportManifest>('SELECT payload FROM exports WHERE job_id=?', jobId); }
