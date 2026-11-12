@@ -20,7 +20,9 @@
     "docs/TOOLS.md",
     "docs/DATA_MODEL.md",
     "docs/TESTING.md",
-    "examples"
+    "examples",
+    "CONTRIBUTING.md",
+    "third-party-licenses"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",

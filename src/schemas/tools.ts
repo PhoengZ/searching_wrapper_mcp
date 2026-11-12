@@ -18,6 +18,7 @@ const search = z.object({
   if (input.date_from && input.date_to && input.date_from > input.date_to) context.addIssue({ code: 'custom', message: 'Reversed date range' });
   if (input.match_mode === 'phrase' && input.keywords.length !== 1) context.addIssue({ code: 'custom', message: 'Phrase requires exactly one keyword' });
   if (!input.include_comments && ((input.max_comments_per_post ?? 0) > 0 || (input.max_total_comments ?? 0) > 0)) context.addIssue({ code: 'custom', message: 'Comments not requested' });
+  if (input.include_comments && (input.max_comments_per_post === 0 || input.max_total_comments === 0)) context.addIssue({ code: 'custom', message: 'Requested comments require positive limits' });
 });
 export const schemas = {
   discover_sources: z.object({ query: text, platform: z.literal('facebook').default('facebook'), max_candidates: positive(10, 5), max_duration_seconds: positive(120, 30) }).strict(),

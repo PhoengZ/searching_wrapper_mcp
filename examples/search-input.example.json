@@ -1,0 +1,11 @@
+{
+  "source_id": "replace-with-registered-source-id",
+  "keywords": ["DCA", "กองทุน"],
+  "match_mode": "any",
+  "timezone": "Asia/Bangkok",
+  "max_posts": 30,
+  "include_comments": true,
+  "max_comments_per_post": 20,
+  "max_total_comments": 300,
+  "max_duration_seconds": 180
+}

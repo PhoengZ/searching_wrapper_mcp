@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "local-social-research": {
+      "command": "C:/Program Files/nodejs/node.exe",
+      "args": ["C:/path/to/local-social-research-mcp/dist/index.js"],
+      "env": {
+        "WRAPPER_MODE": "mock",
+        "WRAPPER_DATA_DIR": "C:/path/to/private-research-data"
+      }
+    }
+  }
+}

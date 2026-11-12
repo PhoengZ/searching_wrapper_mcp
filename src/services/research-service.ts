@@ -29,7 +29,9 @@ export class ResearchService {
     for (const field of ['max_posts', 'max_comments_per_post', 'max_total_comments', 'max_duration_seconds'] as const) if (typeof input[field] === 'number' && input[field] > this.config.limits[field]) throw new AppError('LIMIT_EXCEEDED');
   }
   startSearch(raw: unknown) {
-    const input = schemas.start_search.parse(raw); this.checkLimits(input);
+    const input = schemas.start_search.parse(raw);
+    if (input.include_comments) { input.max_comments_per_post ??= Math.min(20, this.config.limits.max_comments_per_post); input.max_total_comments ??= Math.min(300, this.config.limits.max_total_comments); }
+    this.checkLimits(input);
     const source = this.store.source(input.source_id); authorize(source.canonical_url, this.config);
     if (source.capabilities.search === 'unsupported') throw new AppError('UNSUPPORTED_CAPABILITY');
     if (input.resume_from_job_id) {
@@ -70,6 +72,7 @@ export class ResearchService {
       if (!candidate.published_at || !Number.isFinite(Date.parse(candidate.published_at))) job.counts.unknown_date_count++;
       if (matched.length && matchesDate(candidate.published_at, input)) {
         const post = this.save(job, candidate, matched, context); job.counts.posts_matched++; job.counts.posts_saved++;
+        this.store.patchJob(job.job_id, { counts: job.counts });
         if (input.include_comments) {
           if (capabilities.comments === 'unsupported') throw new AppError('unsupported_ui');
           const commentInput = schemas.read_comments.parse({ source_id: source.source_id, post_record_ids: [post.record_id], max_comments_per_post: input.max_comments_per_post ?? 20, max_total_comments: input.max_total_comments ?? 300, max_duration_seconds: input.max_duration_seconds });

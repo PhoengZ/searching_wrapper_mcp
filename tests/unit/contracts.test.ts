@@ -3,7 +3,7 @@ import { schemas } from '../../src/schemas/tools.js';
 import { readConfig } from '../../src/config.js';
 test('strict inputs reject invalid dates, limits, unknown fields and inconsistent comments', () => {
   const base = { source_id: 'a', keywords: ['DCA'] };
-  for (const patch of [{ keywords: ['  '] }, { max_posts: '5' }, { max_posts: 101 }, { date_from: '2026-02-30' }, { date_from: '2026-11-12', date_to: '2026-11-01' }, { timezone: 'No/SuchZone' }, { extra: true }, { include_comments: false, max_total_comments: 3 }]) {
+  for (const patch of [{ keywords: ['  '] }, { max_posts: '5' }, { max_posts: 101 }, { date_from: '2026-02-30' }, { date_from: '2026-11-12', date_to: '2026-11-01' }, { timezone: 'No/SuchZone' }, { extra: true }, { include_comments: false, max_total_comments: 3 }, { include_comments: true, max_total_comments: 0 }]) {
     expect(schemas.start_search.safeParse({ ...base, ...patch }).success).toBe(false);
   }
   expect(schemas.start_search.parse(base)).toMatchObject({ max_posts: 30, timezone: 'Asia/Bangkok', include_comments: false });
