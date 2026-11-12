@@ -46,7 +46,7 @@ export class Store {
     this.db.prepare('INSERT INTO jobs VALUES (?,?)').run(job.job_id, JSON.stringify(job)); return job;
   }
   job(id: string): Job { const value = this.one<Job>('SELECT payload FROM jobs WHERE id=?', id); if (!value) throw new AppError('JOB_NOT_FOUND'); return value; }
-  listJobs(): Job[] { return this.many<Job>('SELECT payload FROM jobs ORDER BY id'); }
+  listJobs(): Job[] { return this.many<Job>('SELECT payload FROM jobs ORDER BY rowid'); }
   patchJob(id: string, patch: Partial<Job>): Job {
     const before = this.job(id);
     if (terminal(before.status) && patch.status && patch.status !== before.status) throw new AppError('INVALID_JOB_TRANSITION');
