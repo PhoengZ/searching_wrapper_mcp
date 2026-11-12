@@ -7,6 +7,7 @@ import { schemas, type CommentsInput } from '../schemas/tools.js';
 import { authorize } from '../sources/url-policy.js';
 import type { Store } from '../storage/store.js';
 import { matchText, matchesDate } from './matching.js';
+import { evidenceInput } from '../schemas/output.js';
 export class ResearchService {
   constructor(private store: Store, private config: Config, private engine: JobEngine, private adapter: Adapter) {
     engine.register('search', (job, context) => this.search(job, context));
@@ -49,7 +50,7 @@ export class ResearchService {
     const fullText = Array.from(candidate.text); const truncated = fullText.length > this.config.limits.max_text_length;
     const published = candidate.published_at && Number.isFinite(Date.parse(candidate.published_at)) ? new Date(candidate.published_at).toISOString() : null;
     const { source_identity: _identity, ...observed } = candidate;
-    const record = this.store.observe(job.job_id, { ...observed, platform: job.source!.platform, source_id: job.source!.source_id, parent_id: candidate.parent_id ?? null, published_at: published, text: fullText.slice(0, this.config.limits.max_text_length).join(''), matched_keywords: matched, text_truncated: truncated, limitations: [...candidate.limitations, ...(truncated ? ['text_truncated'] : [])] });
+    const record = this.store.observe(job.job_id, evidenceInput.parse({ ...observed, platform: job.source!.platform, source_id: job.source!.source_id, parent_id: candidate.parent_id ?? null, published_at: published, text: fullText.slice(0, this.config.limits.max_text_length).join(''), matched_keywords: matched, text_truncated: truncated, limitations: [...candidate.limitations, ...(truncated ? ['text_truncated'] : [])] }));
     if (record.seen_before) job.counts.duplicates++; else job.counts.new_records++;
     return record;
   }
@@ -70,7 +71,7 @@ export class ResearchService {
       if (matched.length && matchesDate(candidate.published_at, input)) {
         const post = this.save(job, candidate, matched, context); job.counts.posts_matched++; job.counts.posts_saved++;
         if (input.include_comments) {
-          if (capabilities.comments !== 'supported') throw new AppError('unsupported_ui');
+          if (capabilities.comments === 'unsupported') throw new AppError('unsupported_ui');
           const commentInput = schemas.read_comments.parse({ source_id: source.source_id, post_record_ids: [post.record_id], max_comments_per_post: input.max_comments_per_post ?? 20, max_total_comments: input.max_total_comments ?? 300, max_duration_seconds: input.max_duration_seconds });
           await this.collectComments(job, post, commentInput, context);
         }
@@ -82,7 +83,8 @@ export class ResearchService {
   }
   private async comments(job: Job, context: RunContext): Promise<string> {
     const { _posts, ...request } = job.input; const input = schemas.read_comments.parse(request);
-    const caps = await this.probe(job.source!, context); if (caps.comments !== 'supported') throw new AppError('unsupported_ui');
+    const caps = await this.probe(job.source!, context); if (caps.comments === 'unsupported') throw new AppError('unsupported_ui');
+    job.limitations.push(...caps.limitations); this.store.patchJob(job.job_id, { limitations: job.limitations, effective_filters: { requested_sort: input.sort ?? null, observed_sort: 'adapter_reported', ...{ requested: request } } });
     for (const post of _posts as { record_id: string; url: string }[]) {
       if (job.counts.comments_examined >= input.max_total_comments) return 'limit_reached';
       await this.collectComments(job, post, input, context);

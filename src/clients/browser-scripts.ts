@@ -6,7 +6,7 @@ export const browserScripts = {
       : /captcha/i.test(text) ? 'access_denied'
       : /temporarily blocked|try again later|ถูกบล็อกชั่วคราว|จำกัดการใช้งาน/i.test(text) ? 'rate_limited'
       : /content isn.t available|access denied|ไม่สามารถดูเนื้อหานี้/i.test(text) ? 'access_denied' : null;
-    return { url: location.href, title: document.title.slice(0, 300), blocked, has_articles: !!document.querySelector('[role="article"]'), no_results: /no results found|ไม่พบผลลัพธ์/i.test(text) };
+    return { url: location.href, title: document.title.slice(0, 300), blocked, has_articles: !!document.querySelector('[role="article"]'), has_comment_controls: /Comment|ความคิดเห็น/.test(text), no_results: /no results found|ไม่พบผลลัพธ์/i.test(text), no_posts: /no posts available|ยังไม่มีโพสต์|ไม่มีโพสต์/i.test(text), no_comments: /no comments yet|ยังไม่มีความคิดเห็น/i.test(text) };
   }`,
   scroll: `() => { window.scrollBy(0, Math.min(700, window.innerHeight)); return { scrolled: true }; }`,
   expand_text: `() => { let count = 0; for (const el of document.querySelectorAll('button,[role="button"]')) { if (count < 3 && /^(See more|ดูเพิ่มเติม)$/i.test(el.textContent.trim())) { el.click(); count++; } } return { expanded: count }; }`,
@@ -18,7 +18,7 @@ export const browserScripts = {
       if (!name || name.length > 200 || !['facebook.com','www.facebook.com','m.facebook.com'].includes(url.hostname) || /^\\/(search|login|help|groups|watch|marketplace|settings|privacy)(\\/|$)/.test(url.pathname) || url.pathname === '/') continue;
       url.hash = ''; for (const key of [...url.searchParams.keys()]) if (!['id'].includes(key)) url.searchParams.delete(key);
       if (seen.has(url.href)) continue; seen.add(url.href); result.push({ name, url: url.href, platform_id: url.searchParams.get('id') }); if (result.length >= 10) break;
-    } return result;
+    } return { url: location.href, items: result };
   }`,
   posts: `() => {
     const result = [];
@@ -29,7 +29,7 @@ export const browserScripts = {
       if (!message || !link) continue;
       const time = article.querySelector('time'); const url = new URL(link.href); const id = url.searchParams.get('story_fbid') || url.pathname.match(/(?:posts|permalink)\\/([^/?]+)/)?.[1] || null;
       result.push({ text: message.innerText.slice(0, 80000), url: link.href, platform_id: id, published_at: time?.getAttribute('datetime') || null, published_at_raw: time?.innerText || null }); if (result.length >= 100) break;
-    } return result;
+    } return { url: location.href, items: result };
   }`,
   comments: `() => {
     const result = [];
@@ -38,8 +38,9 @@ export const browserScripts = {
       if (!body) continue;
       const link = [...article.querySelectorAll('a[href]')].find(a => /comment_id=/.test(a.href));
       const url = link ? new URL(link.href) : null;
-      result.push({ text: body.innerText.slice(0, 80000), url: link?.href || null, platform_id: url?.searchParams.get('comment_id') || null, parent_platform_id: url?.searchParams.get('reply_comment_id') || null, published_at: null, published_at_raw: null }); if (result.length >= 1000) break;
-    } return result;
+      const reply = url?.searchParams.get('reply_comment_id') || null;
+      result.push({ text: body.innerText.slice(0, 80000), url: link?.href || null, platform_id: reply || url?.searchParams.get('comment_id') || null, parent_platform_id: reply ? url?.searchParams.get('comment_id') || null : null, published_at: null, published_at_raw: null }); if (result.length >= 1000) break;
+    } return { url: location.href, items: result };
   }`,
 } as const;
 export type BrowserScript = keyof typeof browserScripts;
