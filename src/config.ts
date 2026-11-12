@@ -8,7 +8,7 @@ const configuration = z.object({
   retention_days: z.number().int().min(0).max(36500).default(30), export_dir: z.string().optional(),
   authorization: z.object({ facebook: z.object({ discovery_allowed: z.boolean().default(false), collection_scope: z.enum(['none', 'listed_sources', 'platform']).default('none'), source_urls: z.array(z.string().url()).max(1000).default([]) }).strict().prefault({}) }).strict().prefault({}),
 }).strict();
-export type Config = z.infer<typeof configuration> & { dataDir: string; mode: 'mock' | 'facebook'; exportDir: string };
+export type Config = z.infer<typeof configuration> & { dataDir: string; mode: 'mock' | 'facebook'; exportDir: string; browser: 'chrome' | 'msedge'; headless: boolean };
 export function readConfig(env: Record<string, string | undefined> = process.env): Config {
   try {
     if (env.WRAPPER_CONFIG_FILE && !isAbsolute(env.WRAPPER_CONFIG_FILE)) throw new Error('Absolute config path required');
@@ -16,6 +16,8 @@ export function readConfig(env: Record<string, string | undefined> = process.env
     const mode = z.enum(['mock', 'facebook']).parse(env.WRAPPER_MODE ?? 'facebook');
     const dataDir = resolve(env.WRAPPER_DATA_DIR ?? join(env.LOCALAPPDATA ?? join(homedir(), '.local', 'share'), 'local-social-research-mcp'));
     if (parsed.export_dir && !isAbsolute(parsed.export_dir)) throw new Error('Absolute export path required');
-    return { ...parsed, mode, dataDir, exportDir: resolve(parsed.export_dir ?? join(dataDir, 'exports')) };
+    const browser = z.enum(['chrome', 'msedge']).parse(env.WRAPPER_BROWSER ?? 'chrome');
+    const headless = z.enum(['true', 'false']).parse(env.WRAPPER_HEADLESS ?? 'false') === 'true';
+    return { ...parsed, mode, dataDir, browser, headless, exportDir: resolve(parsed.export_dir ?? join(dataDir, 'exports')) };
   } catch { throw new AppError('INVALID_CONFIGURATION'); }
 }
