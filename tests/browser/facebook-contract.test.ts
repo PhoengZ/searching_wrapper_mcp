@@ -21,5 +21,8 @@ test('real browser fixed extractors discover Pages and preserve post/comment/rep
     expect(posts).toHaveLength(1); expect(posts[0]?.published_at).toBe('2026-11-05T05:00:00Z');
     const comments = []; for await (const comment of adapter.comments(source, { record_id: 'post1', url: posts[0]!.url }, schemas.read_comments.parse({ source_id: source.source_id, post_record_ids: ['post1'], max_comments_per_post: 2 }), context)) comments.push(comment);
     expect(comments.map(comment => comment.platform_id)).toEqual(['c1', 'r1']); expect(comments[1]?.parent_id).toBe('c1');
+    const anonymous = []; for await (const comment of adapter.comments(source, { record_id: 'post2', url: 'https://www.facebook.com/synthetic-page/posts/2' }, schemas.read_comments.parse({ source_id: source.source_id, post_record_ids: ['post2'], max_comments_per_post: 2 }), context)) anonymous.push(comment);
+    expect(anonymous).toHaveLength(2); expect(anonymous[0]?.platform_id).toBeNull(); expect(anonymous[0]?.evidence_level).toBe('post'); expect(anonymous[0]?.text).toBe('คอมเมนต์สังเคราะห์');
+    expect(anonymous[1]?.platform_id).toBe('r1'); expect(anonymous[1]?.text).toBe('คำตอบสังเคราะห์');
   } finally { await adapter.close(); rmSync(directory, { recursive: true, force: true }); }
 });

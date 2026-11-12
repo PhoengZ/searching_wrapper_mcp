@@ -24,22 +24,26 @@ export const browserScripts = {
     const result = [];
     for (const article of document.querySelectorAll('[role="article"]')) {
       if (article.parentElement?.closest('[role="article"]')) continue;
-      const message = article.querySelector('[data-ad-preview="message"],[data-ad-comet-preview="message"],[data-testid="post_message"]');
-      const link = [...article.querySelectorAll('a[href]')].find(a => /\\/posts\\/|story_fbid=|\\/permalink\\//.test(a.href));
+      const own = selector => [...article.querySelectorAll(selector)].filter(el => el.closest('[role="article"]') === article);
+      const message = own('[data-ad-preview="message"],[data-ad-comet-preview="message"],[data-testid="post_message"]')[0];
+      const link = own('a[href]').find(a => /\\/posts\\/|story_fbid=|\\/permalink\\//.test(a.href) && !new URL(a.href).searchParams.has('comment_id'));
       if (!message || !link) continue;
-      const time = article.querySelector('time'); const url = new URL(link.href); const id = url.searchParams.get('story_fbid') || url.pathname.match(/(?:posts|permalink)\\/([^/?]+)/)?.[1] || null;
+      const time = own('time')[0]; const url = new URL(link.href); const id = url.searchParams.get('story_fbid') || url.pathname.match(/(?:posts|permalink)\\/([^/?]+)/)?.[1] || null;
       result.push({ text: message.innerText.slice(0, 80000), url: link.href, platform_id: id, published_at: time?.getAttribute('datetime') || null, published_at_raw: time?.innerText || null }); if (result.length >= 100) break;
     } return { url: location.href, items: result };
   }`,
   comments: `() => {
     const result = [];
     for (const article of document.querySelectorAll('[role="article"] [role="article"]')) {
-      const body = article.querySelector('[data-ad-preview="message"],[data-testid="comment_message"],[dir="auto"]');
+      const own = selector => [...article.querySelectorAll(selector)].filter(el => el.closest('[role="article"]') === article);
+      const body = own('[data-ad-preview="message"],[data-testid="comment_message"],[dir="auto"]')[0];
       if (!body) continue;
-      const link = [...article.querySelectorAll('a[href]')].find(a => /comment_id=/.test(a.href));
+      const link = own('a[href]').find(a => /comment_id=/.test(a.href));
+      let root = article; while (root.parentElement?.closest('[role="article"]')) root = root.parentElement.closest('[role="article"]');
+      const postLink = [...root.querySelectorAll('a[href]')].find(a => a.closest('[role="article"]') === root && /\\/posts\\/|story_fbid=|\\/permalink\\//.test(a.href) && !new URL(a.href).searchParams.has('comment_id'));
       const url = link ? new URL(link.href) : null;
       const reply = url?.searchParams.get('reply_comment_id') || null;
-      result.push({ text: body.innerText.slice(0, 80000), url: link?.href || null, platform_id: reply || url?.searchParams.get('comment_id') || null, parent_platform_id: reply ? url?.searchParams.get('comment_id') || null : null, published_at: null, published_at_raw: null }); if (result.length >= 1000) break;
+      result.push({ text: body.innerText.slice(0, 80000), url: link?.href || null, post_url: postLink?.href || null, platform_id: reply || url?.searchParams.get('comment_id') || null, parent_platform_id: reply ? url?.searchParams.get('comment_id') || null : null, published_at: null, published_at_raw: null }); if (result.length >= 1000) break;
     } return { url: location.href, items: result };
   }`,
 } as const;

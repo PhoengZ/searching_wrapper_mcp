@@ -63,6 +63,7 @@ On `needs_login`, log in directly in the dedicated browser. Never pass passwords
 
 - Page discovery uses Facebook Pages search UI, returning observed names/URLs for the **host LLM** to choose.
 - Search samples **visible feed posts** and filters text/dates locally. It does not promise an exhaustive Page search or enforce Facebook's own keyword/date filters.
+- Post permalinks must establish ownership by the selected Page, or match the exact selected post. Comment articles must establish their containing post. Unverifiable aliases, shared/recommended foreign posts and unsupported permalink variants stop with `source_mismatch`; the document URL alone is insufficient evidence.
 - Comments are opt-in. Direct evidence URLs, reply parents and sort are reported only when observed. Requested comment sorting is currently **not enforced**, and output reports `unknown` plus limitations.
 - Missing/ambiguous dates remain unknown. With an active date range, unknown dates are excluded and counted.
 - Facebook Groups, X and Instagram are unsupported; Page/post support remains experimental until live acceptance is recorded.
@@ -74,7 +75,7 @@ Defaults / hard maximums: posts **30/100**, comments per post **20/100**, total 
 
 Post/comment limits count distinct **examined** items, not only matches. Invalid limits are rejected, not silently clamped. Durations start at `running`; queue wait is separate. Polling never creates jobs. Each submission creates a new job.
 
-Cancellation preserves committed results and rejects late writes. A timeout returns partial evidence with `time_limit`. A new runtime marks interrupted queued/running jobs as partial/failed without automatic replay. `completed` means the bounded workflow finished, not complete coverage of a platform. See [tool contracts](docs/TOOLS.md).
+Cancellation preserves committed results and rejects late writes. A job deadline returns partial evidence with `time_limit`. Browser request timeouts report `browser_action_timeout` and terminate the owned browser process tree before another queued job runs; dependency failures also reset the browser. Tool discovery is bounded and cancellable. A new runtime marks interrupted queued/running jobs as partial/failed without automatic replay. `completed` means the bounded workflow finished, not complete coverage of a platform. See [tool contracts](docs/TOOLS.md).
 
 ## Local data, export and deletion
 

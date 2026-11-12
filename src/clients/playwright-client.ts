@@ -1,4 +1,4 @@
-import { Client } from '@modelcontextprotocol/client';
+import { Client, SdkError, SdkErrorCode } from '@modelcontextprotocol/client';
 import { StdioClientTransport, getDefaultEnvironment } from '@modelcontextprotocol/client/stdio';
 import type { RunContext } from '../adapters/adapter.js';
 import { AppError } from '../domain/errors.js';
@@ -11,18 +11,26 @@ export class BrowserClient {
   private transport: StdioClientTransport | null = null;
   private tools = new Map<string, Record<string, unknown>>();
   private connecting: Promise<void> | null = null;
+  private connectController: AbortController | null = null;
+  private closing: Promise<void> | null = null;
+  private invalidated = false;
   constructor(private options: BrowserOptions) {}
   get pid(): number | null { return this.transport?.pid ?? null; }
   private async connect(context?: RunContext): Promise<void> {
+    if (this.closing) await this.closing;
     if (this.client) return;
     if (this.connecting) return this.connecting;
+    const controller = new AbortController(); this.connectController = controller;
+    const signal = context ? AbortSignal.any([controller.signal, context.signal]) : controller.signal;
+    const requestOptions = () => ({ signal, timeout: context ? Math.max(1, Math.min(10000, context.deadline - performance.now())) : 10000 });
     this.connecting = (async () => {
       const transport = new StdioClientTransport({ command: this.options.command, args: this.options.args, cwd: this.options.cwd, env: getDefaultEnvironment(), stderr: 'pipe', maxBufferSize: 4 * 1024 * 1024 });
       this.transport = transport; transport.stderr?.on('data', () => {});
       const client = new Client({ name: 'local-social-research-browser-client', version: '0.1.0' });
       try {
-        await client.connect(transport, { timeout: context ? Math.max(1, Math.min(10000, context.deadline - performance.now())) : 10000, signal: context?.signal });
-        const listed = await client.listTools();
+        await client.connect(transport, requestOptions());
+        const listed = await client.listTools(undefined, requestOptions());
+        signal.throwIfAborted();
         for (const tool of listed.tools) this.tools.set(tool.name, tool.inputSchema as Record<string, unknown>);
         for (const [tool, field] of [['browser_navigate', 'url'], ['browser_evaluate', 'function']] as const) {
           const schema = this.tools.get(tool); const properties = schema?.properties as Record<string, { type?: string }> | undefined;
@@ -30,8 +38,11 @@ export class BrowserClient {
         }
         if (!this.tools.has('browser_close')) throw new AppError('INCOMPATIBLE_BROWSER_TOOLS');
         this.client = client;
-      } catch (error) { await client.close().catch(() => {}); this.transport = null; throw error instanceof AppError ? error : new AppError('dependency_failure'); }
-    })().finally(() => { this.connecting = null; });
+      } catch (error) {
+        try { await this.terminate(transport); } finally { await client.close().catch(() => {}); this.transport = null; this.tools.clear(); }
+        throw error instanceof AppError ? error : new AppError('dependency_failure');
+      }
+    })().finally(() => { this.connecting = null; this.connectController = null; });
     return this.connecting;
   }
   private validateUrl(value: string): void {
@@ -45,7 +56,14 @@ export class BrowserClient {
       if (value.isError) throw new AppError('browser_action_failed');
       if (Buffer.byteLength(JSON.stringify(value)) > 2 * 1024 * 1024) throw new AppError('BROWSER_RESPONSE_TOO_LARGE');
       context.check(); return value;
-    } catch (error) { context.check(); throw error instanceof AppError ? error : new AppError('browser_action_failed'); }
+    } catch (error) {
+      if (SdkError.isInstance(error)) {
+        this.invalidated = true;
+        context.check();
+        throw new AppError(error.code === SdkErrorCode.RequestTimeout ? 'browser_action_timeout' : 'dependency_failure');
+      }
+      context.check(); throw error instanceof AppError ? error : new AppError('browser_action_failed');
+    }
   }
   private async evaluate(script: BrowserScript, context: RunContext): Promise<unknown> {
     if (!Object.hasOwn(browserScripts, script)) throw new AppError('UNSUPPORTED_BROWSER_ACTION');
@@ -73,18 +91,30 @@ export class BrowserClient {
     }
     throw new AppError('UNSUPPORTED_BROWSER_ACTION');
   }
-  async close(): Promise<void> {
+  private async terminate(transport: StdioClientTransport): Promise<void> {
+    const owned = transport.pid; if (!owned) return;
+    try { process.kill(owned, 0); } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ESRCH') return; throw error; }
+    try { if (transport.pid === owned) await terminateOwnedTree(owned); }
+    catch (error) { try { process.kill(owned, 0); } catch (gone) { if ((gone as NodeJS.ErrnoException).code === 'ESRCH') return; } throw error; }
+  }
+  close(): Promise<void> {
+    if (this.closing) return this.closing;
+    this.connectController?.abort(new AppError('browser_closed'));
+    this.closing = this.closeOwned().finally(() => { this.closing = null; });
+    return this.closing;
+  }
+  private async closeOwned(): Promise<void> {
     if (this.connecting) await this.connecting.catch(() => {});
     const client = this.client; const transport = this.transport; if (!transport) return;
-    const owned = transport.pid;
     try {
       if (client) {
+        if (this.invalidated) { await this.terminate(transport); await client.close(); return; }
         let timer: NodeJS.Timeout | undefined;
         try { await Promise.race([client.callTool({ name: 'browser_close', arguments: {} }, { timeout: 5000 }), new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new Error('CLOSE_TIMEOUT')), 5000); })]); }
-        catch { if (owned && transport.pid === owned) await terminateOwnedTree(owned); }
+        catch { await this.terminate(transport); }
         finally { clearTimeout(timer); }
         await client.close();
       } else await transport.close();
-    } finally { this.client = null; this.transport = null; this.tools.clear(); }
+    } finally { this.client = null; this.transport = null; this.tools.clear(); this.invalidated = false; }
   }
 }

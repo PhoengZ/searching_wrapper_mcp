@@ -50,7 +50,7 @@ export class JobEngine {
           this.loginGate = true;
           for (const queued of this.store.listJobs()) if (queued.status === 'queued') this.store.patchJob(queued.job_id, { status: 'needs_login', stop_reason: 'login_required' });
         }
-        if (controller.signal.aborted || reason === 'time_limit') {
+        if (controller.signal.aborted || ['time_limit', 'browser_action_timeout', 'dependency_failure'].includes(reason)) {
           try { await this.stopActions(); } catch { this.unavailable = true; this.store.patchJob(job.job_id, { limitations: [...this.store.job(job.job_id).limitations, 'browser_cleanup_failed'] }); }
         }
       } finally {

@@ -21,3 +21,23 @@ test('login and unsupported UI never become successful empty results', async () 
   const browser: BrowserPort = { async execute() { return { url: source.canonical_url, title: 'Login', blocked: 'login_required' }; }, async close() {} };
   await expect(new FacebookPageAdapter(browser).probeSource(source, context())).rejects.toThrow('login_required');
 });
+test.each(['page', 'post'] as const)('a %s source rejects an unrelated article even on the correct document URL', async kind => {
+  const selected: Source = kind === 'page' ? source : { ...source, source_type: 'post', canonical_url: `${source.canonical_url}/posts/selected`, identity: `${source.canonical_url}/posts/selected` };
+  const browser: BrowserPort = { async execute(action) {
+    if (action.kind === 'read' && action.script === 'state') return { url: selected.canonical_url, title: 'Synthetic', blocked: null, has_articles: true };
+    if (action.kind === 'read' && action.script === 'posts') return { url: selected.canonical_url, items: [{ text: 'DCA unrelated', url: kind === 'page' ? 'https://www.facebook.com/unrelated/posts/1' : `${source.canonical_url}/posts/unrelated`, platform_id: 'unrelated', published_at: null, published_at_raw: null }] };
+    return {};
+  }, async close() {} };
+  const collect = async () => { const rows = []; for await (const row of new FacebookPageAdapter(browser).search(selected, schemas.start_search.parse({ source_id: 'page', keywords: ['DCA'], max_posts: 1 }), context())) rows.push(row); return rows; };
+  await expect(collect()).rejects.toThrow('source_mismatch');
+});
+test('comments reject unrelated post links instead of inheriting the requested post identity', async () => {
+  const postUrl = `${source.canonical_url}/posts/1`;
+  const browser: BrowserPort = { async execute(action) {
+    if (action.kind === 'read' && action.script === 'state') return { url: postUrl, title: 'Synthetic', blocked: null, has_articles: true };
+    if (action.kind === 'read' && action.script === 'comments') return { url: postUrl, items: [{ text: 'foreign comment', url: 'https://www.facebook.com/unrelated/posts/2?comment_id=c', post_url: postUrl, platform_id: 'c', parent_platform_id: null, published_at: null, published_at_raw: null }] };
+    return {};
+  }, async close() {} };
+  const collect = async () => { for await (const _row of new FacebookPageAdapter(browser).comments(source, { record_id: 'p', url: postUrl }, schemas.read_comments.parse({ source_id: 'page', post_record_ids: ['p'], max_comments_per_post: 1 }), context())) {} };
+  await expect(collect()).rejects.toThrow('source_mismatch');
+});

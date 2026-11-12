@@ -6,12 +6,13 @@ import { canonicalizeSource } from '../../sources/url-policy.js';
 import type { BrowserClient } from '../../clients/playwright-client.js';
 import type { BrowserScript } from '../../clients/browser-scripts.js';
 import type { Adapter, PostCandidate, RunContext } from '../adapter.js';
+import { assertPostSource, assertSamePost } from './post-identity.js';
 export type BrowserPort = Pick<BrowserClient, 'execute' | 'close'>;
 export const pageState = z.object({ url: z.string().url(), title: z.string(), blocked: z.string().nullable(), has_articles: z.boolean().optional(), has_comment_controls: z.boolean().optional(), no_results: z.boolean().optional(), no_posts: z.boolean().optional(), no_comments: z.boolean().optional() });
 const pages = z.object({ url: z.string().url(), items: z.array(z.object({ name: z.string().max(200), url: z.string().max(2048), platform_id: z.string().nullable() })).max(10) });
 const rawPost = z.object({ text: z.string().max(80000), url: z.string().max(2048), platform_id: z.string().max(200).nullable(), published_at: z.string().max(500).nullable(), published_at_raw: z.string().max(500).nullable() });
 const postBatch = z.object({ url: z.string().url(), items: z.array(rawPost).max(100) });
-const commentBatch = z.object({ url: z.string().url(), items: z.array(rawPost.extend({ url: z.string().max(2048).nullable(), parent_platform_id: z.string().max(200).nullable() })).max(1000) });
+const commentBatch = z.object({ url: z.string().url(), items: z.array(rawPost.extend({ url: z.string().max(2048).nullable(), post_url: z.string().max(2048).nullable(), parent_platform_id: z.string().max(200).nullable() })).max(1000) });
 export class FacebookPageAdapter implements Adapter {
   constructor(private browser: BrowserPort) {}
   protected async state(context: RunContext) {
@@ -62,7 +63,8 @@ export class FacebookPageAdapter implements Adapter {
       await this.read('expand_text', context);
       const batch = postBatch.parse(await this.read('posts', context)); this.assertTarget(batch.url, source.canonical_url); let added = 0;
       for (const row of batch.items) {
-        const url = canonicalizeSource(row.url, 'post'); const key = row.platform_id ?? url; if (seen.has(key)) continue; seen.add(key); added++; count++;
+        const url = canonicalizeSource(row.url, 'post'); assertPostSource(url, source);
+        const key = row.platform_id ?? url; if (seen.has(key)) continue; seen.add(key); added++; count++;
         yield { ...row, url, source_identity: source.identity, record_type: 'post', limitations: ['Visible feed sample; original post URL observed in the target feed.'] };
         if (count >= request.max_posts || source.source_type === 'post') return;
       }
@@ -72,6 +74,7 @@ export class FacebookPageAdapter implements Adapter {
     if (!count && !initial.no_posts && !initial.no_results) throw new AppError('unsupported_ui');
   }
   async *comments(source: Source, post: { record_id: string; url: string }, request: CommentsInput, context: RunContext): AsyncGenerator<PostCandidate> {
+    assertPostSource(post.url, source);
     await this.browser.execute({ kind: 'navigate', url: canonicalizeSource(post.url, 'post') }, context);
     const initial = await this.state(context); this.assertTarget(initial.url, post.url);
     const seen = new Set<string>(); let empty = 0; let count = 0;
@@ -79,6 +82,8 @@ export class FacebookPageAdapter implements Adapter {
       context.check(); await this.state(context); await this.read('expand_comments', context);
       const batch = commentBatch.parse(await this.read('comments', context)); this.assertTarget(batch.url, post.url); let added = 0;
       for (const row of batch.items) {
+        if (!row.post_url) throw new AppError('source_mismatch');
+        assertSamePost(row.post_url, post.url); if (row.url) assertSamePost(row.url, post.url);
         const key = row.platform_id ?? `${row.text}\u0000${row.parent_platform_id}`; if (seen.has(key)) continue; seen.add(key); count++; added++;
         const url = row.url ? canonicalizeSource(row.url, 'post') : post.url;
         yield { ...row, url, parent_id: row.parent_platform_id, source_identity: source.identity, record_type: 'comment', post_record_id: post.record_id, evidence_level: row.url ? 'comment' : 'post', comment_sort: 'unknown', limitations: ['Comment sort and completeness are unknown.', ...(request.sort ? ['Requested sort not enforced by this adapter.'] : []), ...(!row.url ? ['No direct comment URL; evidence is post-level.'] : [])] };

@@ -61,7 +61,7 @@ export class Store {
   observe(jobId: string, input: EvidenceInput): Evidence {
     if (this.job(jobId).status !== 'running') throw new AppError('JOB_NOT_RUNNING');
     const method = input.platform_id ? 'platform_id' : input.record_type === 'post' || input.evidence_level === 'comment' ? 'url' : 'hash';
-    const itemKey = method === 'platform_id' ? input.platform_id : method === 'url' ? input.url : createHash('sha256').update(JSON.stringify([input.text.normalize('NFC'), input.parent_id, input.published_at_raw])).digest('hex');
+    const itemKey = method === 'platform_id' ? input.platform_id : method === 'url' ? input.url : createHash('sha256').update(JSON.stringify([input.post_record_id, input.text.normalize('NFC'), input.parent_id, input.published_at_raw])).digest('hex');
     const key = JSON.stringify([input.platform, input.source_id, input.record_type, method, itemKey]);
     const existing = this.db.prepare('SELECT id FROM identities WHERE identity_key=?').get(key) as { id: string } | undefined;
     const recordId = existing?.id ?? randomUUID();
