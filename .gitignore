@@ -1,0 +1,27 @@
+# Dependencies, build output and test artifacts
+node_modules/
+dist/
+coverage/
+.vitest/
+*.tsbuildinfo
+
+# Machine-local configuration and collected data
+.env
+.env.*
+!.env.example
+.local-data/
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.log
+playwright-report/
+test-results/
+
+# Local planning and conversation documents (keep public product docs tracked)
+/Feature.md
+/Feaature.md
+/sequence.md
+/docs/superpowers/
+/.superpowers/
+/.worktrees/
