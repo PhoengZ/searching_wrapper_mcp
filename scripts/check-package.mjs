@@ -1,0 +1,11 @@
+import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+const npmCli = process.env.npm_execpath ?? join(dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js');
+if (!existsSync(npmCli)) throw new Error('Run this check with npm run check:package');
+const output = execFileSync(process.execPath, [npmCli, 'pack', '--dry-run', '--json', '--ignore-scripts'], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
+const files = JSON.parse(output)[0].files.map(file => file.path);
+for (const required of ['package.json', 'dist/index.js', 'README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'SECURITY.md', 'docs/TOOLS.md', 'examples/host-config.example.json']) if (!files.includes(required)) throw new Error(`Missing required file: ${required}`);
+const forbidden = /(^|\/)(node_modules|profile|profiles|exports|browser-output|\.superpowers|superpowers|\.env(?:\..*)?)(\/|$)|\.(sqlite(?:-.*)?|db(?:-.*)?|log)$|(^|\/)(Feature|Feaature|sequence|bangkok-ai-jobs-[^/]*)\.md$/i;
+for (const file of files) if (forbidden.test(file)) throw new Error(`Forbidden package artifact: ${file}`);
+console.log(`Package manifest checked: ${files.length} files; no forbidden local/runtime artifacts.`);

@@ -1,0 +1,47 @@
+{
+  "name": "local-social-research-mcp",
+  "version": "0.1.0",
+  "description": "Local MCP research tools with bounded browser jobs and evidence storage",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24.19.0 <25"
+  },
+  "bin": {
+    "local-social-research-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "SECURITY.md",
+    "docs/ARCHITECTURE.md",
+    "docs/TOOLS.md",
+    "docs/DATA_MODEL.md",
+    "docs/TESTING.md",
+    "examples",
+    "CONTRIBUTING.md",
+    "third-party-licenses"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.check.json --noEmit",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:browser": "vitest run --config vitest.browser.config.ts",
+    "test:live": "vitest run --config vitest.live.config.ts",
+    "check:package": "node scripts/check-package.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/client": "2.4.0",
+    "@modelcontextprotocol/server": "2.4.0",
+    "@playwright/mcp": "0.0.85",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "typescript": "7.0.2",
+    "vitest": "5.1.0"
+  }
+}
